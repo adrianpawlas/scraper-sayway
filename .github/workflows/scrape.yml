@@ -2,12 +2,6 @@ name: SayWay Scraper
 
 on:
   workflow_dispatch:
-    inputs:
-      force:
-        description: 'Force full rescrape'
-        required: false
-        type: boolean
-        default: false
   schedule:
     - cron: '0 15 * * 0'
 
@@ -33,24 +27,7 @@ jobs:
           echo "SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}" >> .env
 
       - name: Run scraper
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: |
-          python3 main.py
+        run: python3 main.py
 
       - name: Verify data import
-        run: |
-          echo "Checking for imported products..."
-          python3 -c "
-import os
-from supabase import create_client
-url = os.getenv('SUPABASE_URL')
-key = os.getenv('SUPABASE_ANON_KEY')
-client = supabase.create_client(url, key)
-result = client.table('products').select('id', count='exact').eq('source', 'scraper-sayway').execute()
-print(f'Products in database: {result.count}')
-if result.count == 0:
-    raise Exception('No products imported!')
-print('Import verification passed!')
-"
+        run: python3 verify.py
