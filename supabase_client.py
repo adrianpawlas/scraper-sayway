@@ -102,6 +102,14 @@ class SupabaseClient:
             logger.error(f"Error getting products: {e}")
             return []
 
+    def update_product(self, product_url: str, updates: dict) -> bool:
+        try:
+            self.client.table(self.table).update(updates).eq("product_url", product_url).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Error updating product: {e}")
+            return False
+
     def delete_product(self, product_id: str) -> bool:
         try:
             self.client.table(self.table).delete().eq("id", product_id).execute()
