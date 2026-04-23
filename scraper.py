@@ -90,34 +90,29 @@ class ShopifyScraper:
         product_data["sale"] = f"{sale_price}USD" if sale_price else product_data["price"]
         
         images = []
-        img_elements = soup.select('.product-featured-media img, .product__media img, .product-image-primary img')
-        for img in img_elements:
-            src = img.get("src") or img.get("data-src")
-            if src and "loading" not in src.lower() and "placeholder" not in src.lower():
-                if src.startswith("//"):
-                    src = "https:" + src
-                if src not in images:
-                    images.append(src)
         
-        if not images:
-            img_elements = soup.select('[class*="media"] img')
-            for img in img_elements:
-                src = img.get("src") or img.get("data-src")
-                if src and "loading" not in src.lower():
+        # Get images from main content area only - this has the real product images
+        main_content = soup.select_one('main') or soup.select_one('#MainContent') or soup.body
+        if main_content:
+            all_imgs = main_content.select('img[src*="/files/"]')
+            for img in all_imgs:
+                src = img.get("src")
+                if src and "sayway_logo" not in src.lower() and "size_guide" not in src.lower():
                     if src.startswith("//"):
                         src = "https:" + src
                     if src not in images:
                         images.append(src)
         
+        # Fallback
         if not images:
-            meta_images = soup.select('meta[property="og:image"]')
-            for meta in meta_images:
-                content = meta.get("content")
-                if content:
-                    if content.startswith("//"):
-                        content = "https:" + content
-                    if content not in images:
-                        images.append(content)
+            media_elements = soup.select('[data-media-id]')
+            for img in media_elements:
+                src = img.get("src") or img.get("data-src")
+                if src and "sayway_logo" not in src.lower():
+                    if src.startswith("//"):
+                        src = "https:" + src
+                    if src not in images:
+                        images.append(src)
         
         product_data["image_url"] = images[0] if images else ""
         product_data["additional_images"] = images[1:] if len(images) > 1 else []
