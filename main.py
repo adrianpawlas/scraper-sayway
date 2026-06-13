@@ -65,6 +65,7 @@ class SayWayScraper:
         new_batch = []
         update_batch = []
         regenerate_emb_batch = []
+        missing_emb_batch = []
         
         for product in all_scraped_products:
             url = product.get("product_url")
@@ -85,37 +86,24 @@ class SayWayScraper:
                     update_batch.append(product)
                     logger.info(f"UPDATE: {product.get('title')}")
             else:
-                self.stats["unchanged"] += 1
-                logger.info(f"UNCHANGED: {product.get('title')}")
+                # Check if existing product is missing embeddings — backfill if so
+                if self._is_missing_embeddings(existing):
+                    missing_emb_batch.append(product)
+                    logger.info(f"BACKFILL EMB: {product.get('title')} (missing embeddings)")
+                else:
+                    self.stats["unchanged"] += 1
+                    logger.info(f"UNCHANGED: {product.get('title')}")
         
-        logger.info(f"\n--- Processing: {len(new_batch)} new, {len(update_batch)} updated, {len(regenerate_emb_batch)} need embeddings ---")
+        emb_candidates = new_batch + update_batch + regenerate_emb_batch + missing_emb_batch
+        logger.info(f"\n--- Processing: {len(new_batch)} new, {len(update_batch)} updated, {len(regenerate_emb_batch)} need embeddings, {len(missing_emb_batch)} backfill ---")
         
-        for product in new_batch:
-            image_url = product.get("image_url")
-            if image_url:
-                product["image_embedding"] = self._generate_image_embedding_with_delay(image_url)
-            
-            metadata = json.loads(product.get("metadata", "{}"))
-            info_text = self._build_info_text(product, metadata)
-            product["info_embedding"] = self._generate_text_embedding_with_delay(info_text)
-            product["updated_at"] = datetime.now(timezone.utc).isoformat()
-        
-        for product in regenerate_emb_batch:
-            image_url = product.get("image_url")
-            if image_url:
-                product["image_embedding"] = self._generate_image_embedding_with_delay(image_url)
-            
-            metadata = json.loads(product.get("metadata", "{}"))
-            info_text = self._build_info_text(product, metadata)
-            product["info_embedding"] = self._generate_text_embedding_with_delay(info_text)
-            product["updated_at"] = datetime.now(timezone.utc).isoformat()
-        
-        for product in update_batch:
+        for product in emb_candidates:
+            self._generate_product_embeddings(product)
             product["updated_at"] = datetime.now(timezone.utc).isoformat()
         
         logger.info(f"\n--- Inserting batches to database ---")
         
-        all_to_insert = new_batch + update_batch + regenerate_emb_batch
+        all_to_insert = new_batch + update_batch + regenerate_emb_batch + missing_emb_batch
         self._insert_batches_with_retry(all_to_insert)
         
         stale_products = self._find_stale_products(existing_by_url, scraped_urls)
@@ -224,6 +212,19 @@ class SayWayScraper:
             if metadata.get("colors"):
                 parts.append(" ".join(metadata.get("colors", [])))
         return " ".join([p for p in parts if p])
+
+    def _generate_product_embeddings(self, product: dict) -> None:
+        image_url = product.get("image_url")
+        if image_url:
+            product["image_embedding"] = self._generate_image_embedding_with_delay(image_url)
+        
+        metadata = json.loads(product.get("metadata", "{}"))
+        info_text = self._build_info_text(product, metadata)
+        product["info_embedding"] = self._generate_text_embedding_with_delay(info_text)
+
+    def _is_missing_embeddings(self, existing: dict) -> bool:
+        """Check if an existing product is missing either image or info embeddings."""
+        return existing.get("image_embedding") is None or existing.get("info_embedding") is None
 
     def _generate_id(self, url: str) -> str:
         return hashlib.md5(url.encode()).hexdigest()[:16]

@@ -33,9 +33,15 @@ class SupabaseClient:
                 "sale": product_data.get("sale"),
                 "metadata": product_data.get("metadata"),
                 "additional_images": product_data.get("additional_images"),
-                "image_embedding": product_data.get("image_embedding"),
-                "info_embedding": product_data.get("info_embedding"),
             }
+            # Only include embedding fields when they have values
+            # to avoid overwriting existing embeddings with null
+            image_emb = product_data.get("image_embedding")
+            if image_emb is not None:
+                data["image_embedding"] = image_emb
+            info_emb = product_data.get("info_embedding")
+            if info_emb is not None:
+                data["info_embedding"] = info_emb
             
             response = self.client.table(self.table).upsert(
                 data,
@@ -52,7 +58,7 @@ class SupabaseClient:
         try:
             records = []
             for product_data in products:
-                records.append({
+                record = {
                     "id": product_data.get("id"),
                     "source": product_data.get("source"),
                     "product_url": product_data.get("product_url"),
@@ -68,9 +74,16 @@ class SupabaseClient:
                     "sale": product_data.get("sale"),
                     "metadata": product_data.get("metadata"),
                     "additional_images": product_data.get("additional_images"),
-                    "image_embedding": product_data.get("image_embedding"),
-                    "info_embedding": product_data.get("info_embedding"),
-                })
+                }
+                # Only include embedding fields when they have values
+                # to avoid overwriting existing embeddings with null
+                image_emb = product_data.get("image_embedding")
+                if image_emb is not None:
+                    record["image_embedding"] = image_emb
+                info_emb = product_data.get("info_embedding")
+                if info_emb is not None:
+                    record["info_embedding"] = info_emb
+                records.append(record)
             
             response = self.client.table(self.table).upsert(
                 records,

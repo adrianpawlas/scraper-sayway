@@ -172,6 +172,14 @@ class ShopifyScraper:
         import hashlib
         return hashlib.md5(url.encode()).hexdigest()[:16]
 
+    def _normalize_url(self, url: str) -> str:
+        url = url.strip()
+        if url.startswith("//"):
+            url = "https:" + url
+        elif not url.startswith("http"):
+            url = self.base_url + url
+        return url
+
     def get_all_product_urls(self) -> list[str]:
         all_products = []
         
@@ -181,8 +189,9 @@ class ShopifyScraper:
                 products = self.parse_collection_page(html)
                 
                 for product in products:
-                    if product["product_url"] not in [p["product_url"] for p in all_products]:
-                        all_products.append(product)
+                    normalized = self._normalize_url(product["product_url"])
+                    if normalized not in [p["product_url"] for p in all_products]:
+                        all_products.append({"product_url": normalized})
             except Exception as e:
                 logger.error(f"Error fetching collection {collection_url}: {e}")
         
@@ -199,6 +208,7 @@ class ShopifyScraper:
 
     def scrape_product(self, url: str) -> Optional[dict]:
         try:
+            url = self._normalize_url(url)
             html = self.fetch_page(url)
             return self.parse_product_page(html, url)
         except Exception as e:
